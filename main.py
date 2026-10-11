@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# EU 热点日报：抓取 -> 去重 -> 分级 -> 渲染 index.html -> 163 SMTP 发送
-import os, sys, json, re, hashlib, smtplib, datetime, pathlib
+# EU 热点日报：抓取 -> 去重 -> 分级 -> 每期存档 -> 渲染首页(日历+历史) -> 163 SMTP 发送
+import os, sys, json, re, calendar, hashlib, smtplib, datetime, pathlib
 from zoneinfo import ZoneInfo
 from email.mime.text import MIMEText
 from email.header import Header
@@ -14,10 +14,10 @@ except ModuleNotFoundError:
 ROOT = pathlib.Path(__file__).resolve().parent
 STATE = ROOT / "state.json"
 PUBLIC = ROOT / "public"
-PUBLIC.mkdir(exist_ok=True)
+ARCHIVE = PUBLIC / "archive"
+ARCHIVE.mkdir(parents=True, exist_ok=True)
 
 def load_env_file(path=ROOT / ".env"):
-    # 无依赖解析 .env；不覆盖已存在的环境变量
     if not path.exists():
         return
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -38,12 +38,15 @@ TZ = env("TIMEZONE", "Europe/Brussels")
 MAIL_HOST = env("MAIL_HOST", "smtp.163.com")
 MAIL_PORT = int(env("MAIL_PORT", "465"))
 MAIL_USER = env("MAIL_USER", "wednet800@163.com")
-MAIL_PASS = env("MAIL_PASS", "")  # 163 授权码，切勿提交进 git
+MAIL_PASS = env("MAIL_PASS", "")
 MAIL_FROM = env("MAIL_FROM", MAIL_USER)
 MAIL_TO = [x.strip() for x in env("MAIL_TO", "hynes800@gmail.com").split(",") if x.strip()]
 LOOKBACK_HOURS = int(env("LOOKBACK_HOURS", "24"))
 MAX_ITEMS = int(env("MAX_ITEMS", "18"))
 STATE_DAYS = int(env("STATE_DAYS", "30"))
+REPO = env("GITHUB_REPOSITORY", "")          # Actions 自动注入，如 hynes800/eu-daily
+CAL_MONTHS = int(env("CAL_MONTHS", "3"))     # 日历显示最近几个月
+SITE_TITLE = "EU 热点日报"
 
 FEEDS = {
     "EU整体": [
@@ -73,7 +76,6 @@ def now_local():
     return datetime.datetime.now(ZoneInfo(TZ))
 
 def should_run():
-    # 仅在本地工作日 08:00 时段执行（配合 UTC cron 双重保险）
     n = now_local()
     return n.weekday() < 5 and n.hour == 8
 
@@ -148,60 +150,148 @@ def fetch():
     items.sort(key=lambda x: (order[x["grade"]], x["country"], x["time"]))
     return items[:MAX_ITEMS], errors
 
-def render(items, errors):
-    date = now_local().strftime("%Y-%m-%d")
-    cards = []
+# ---------- 渲染 ----------
+BASE_CSS = """
+body{margin:0;background:#f2f4f7;color:#1a1d23;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+a{color:#0b3d91;}
+.wrap{max-width:760px;margin:0 auto;padding:24px 14px 40px;}
+h1{font-size:22px;margin:0 0 4px;} .m{font-size:12px;color:#6b7280;}
+h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:8px;}
+.card{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.card.a{border-left:4px solid #c0392b;} .card.b{border-left:4px solid #2f6fb3;} .card.c{border-left:4px solid #c0c4cc;}
+.row1{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
+.grade{font-size:11px;border-radius:4px;padding:1px 8px;color:#fff;}
+.tag{font-size:11px;border-radius:6px;padding:2px 8px;color:#4b5563;background:#eef1f5;} .tag.country{color:#111827;background:#e3e8ef;}
+.tt{font-size:15px;font-weight:600;line-height:1.5;} .tt a{color:#1a1d23;text-decoration:none;}
+.sum{font-size:14px;line-height:1.75;color:#374151;margin-top:4px;}
+.src{font-size:12px;color:#6b7280;margin-top:6px;}
+.foot{margin-top:18px;font-size:12px;color:#9aa1ab;line-height:1.7;border-top:1px solid #e2e6ec;padding-top:12px;}
+/* 日历 */
+.cal{margin-bottom:18px;}
+.cal .mo{display:inline-block;vertical-align:top;margin:0 14px 14px 0;background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:10px;}
+.cal .mo h3{margin:0 0 6px;font-size:13px;text-align:center;color:#374151;}
+.cal table{border-collapse:collapse;font-size:12px;}
+.cal th{color:#9aa1ab;font-weight:400;padding:2px 6px;}
+.cal td{padding:2px 4px;text-align:center;}
+.cal td .d{color:#9aa1ab;}
+.cal td .has a{display:inline-block;min-width:22px;padding:2px 4px;border-radius:6px;background:#eaf1fb;color:#0b3d91;text-decoration:none;font-weight:600;}
+.cal td.today .has a{outline:2px solid #0b3d91;}
+.cal td .dot{display:inline-block;min-width:22px;padding:2px 4px;color:#9aa1ab;}
+/* 历史 */
+.hist{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:6px 14px;margin-bottom:14px;}
+.hist a{display:block;padding:9px 0;border-bottom:1px solid #eef1f5;text-decoration:none;color:#1a1d23;font-size:14px;}
+.hist a:last-child{border-bottom:none;}
+.hist .dt{color:#0b3d91;font-weight:600;margin-right:8px;font-variant-numeric:tabular-nums;}
+.hist .hl{color:#6b7280;font-size:13px;}
+.badge{font-size:11px;color:#6b7280;}
+"""
+
+def cards_html(items):
+    out = []
     for it in items:
         g = it["grade"]
-        cards.append(f"""<div class="card {g}">
+        srcs = " ｜ ".join(f'<a href="{u}">{n}</a>' for n, u in it.get("src", []))
+        src_line = f"{srcs} ｜ " if srcs else ""
+        out.append(f"""<div class="card {g}">
   <div class="row1"><span class="grade" style="background:{GRADE_COLOR[g]}">{GRADE_NAME[g]}</span>
   <span class="tag country">{it["country"]}</span><span class="tag">{it["sector"]}</span></div>
   <div class="tt"><a href="{it["link"]}">{it["title"]}</a></div>
   <div class="sum">{it.get("summary","")}</div>
-  <div class="src">{it["country"]}信源 · 置信度 待人工复核 ｜ 追踪 观察</div>
+  <div class="src">{src_line}置信度 {it.get("conf","待复核")} ｜ 追踪 {it.get("tr","观察")}</div>
 </div>""")
+    return "".join(out)
+
+def foot_html(extra=""):
+    return f"""<div class="foot">自动抓取生成，信源窗口近 {LOOKBACK_HOURS} 小时；内容为公开信息摘要，不构成投资或法律建议，重要事项请核对原文。<br>{extra}</div>"""
+
+def render_issue(items, errors, date_str):
     err_html = f'<div class="sum">抓取异常源 {len(errors)} 个（详见日志）。</div>' if errors else ""
     return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>EU 热点日报 · {date}</title>
-<style>
-body{{margin:0;background:#f2f4f7;color:#1a1d23;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}}
-a{{color:#0b3d91;}}
-.wrap{{max-width:760px;margin:0 auto;padding:24px 14px 40px;}}
-h1{{font-size:22px;margin:0 0 4px;}} .m{{font-size:12px;color:#6b7280;}}
-.card{{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:12px 14px;margin-bottom:10px;}}
-.card.a{{border-left:4px solid {GRADE_COLOR["a"]};}} .card.b{{border-left:4px solid {GRADE_COLOR["b"]};}} .card.c{{border-left:4px solid {GRADE_COLOR["c"]};}}
-.row1{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}}
-.grade{{font-size:11px;border-radius:4px;padding:1px 8px;color:#fff;}}
-.tag{{font-size:11px;border-radius:6px;padding:2px 8px;color:#4b5563;background:#eef1f5;}} .tag.country{{color:#111827;background:#e3e8ef;}}
-.tt{{font-size:15px;font-weight:600;line-height:1.5;}} .tt a{{color:#1a1d23;text-decoration:none;}}
-.sum{{font-size:14px;line-height:1.75;color:#374151;margin-top:4px;}}
-.src{{font-size:12px;color:#6b7280;margin-top:6px;}}
-.foot{{margin-top:18px;font-size:12px;color:#9aa1ab;line-height:1.7;border-top:1px solid #e2e6ec;padding-top:12px;}}
-</style></head><body><div class="wrap">
-<h1>EU 热点日报</h1>
-<div class="m">{date} · {TZ} · 覆盖 EU整体 + 德/法/意/西/罗/匈 · 政经 · IT · AI 高科技 · 本期 {len(items)} 条</div>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{SITE_TITLE} · {date_str} 期</title>
+<style>{BASE_CSS}</style></head><body><div class="wrap">
+<h1>{SITE_TITLE}</h1>
+<div class="m">{date_str} 期 · <a href="../index.html">返回首页/日历</a> · 覆盖 EU整体 + 德/法/意/西/罗/匈 · 政经 · IT · AI 高科技 · 本期 {len(items)} 条</div>
 {err_html}
-{"".join(cards)}
-<div class="foot">自动抓取生成，信源窗口近 {LOOKBACK_HOURS} 小时；内容为公开信息摘要，不构成投资或法律建议，重要事项请核对原文。</div>
+{cards_html(items)}
+{foot_html()}
 </div></body></html>"""
 
+def month_block(year, month, dates, today):
+    cal = calendar.monthcalendar(year, month)
+    rows = []
+    for wk in cal:
+        tds = []
+        for d in wk:
+            if d == 0:
+                tds.append("<td></td>")
+            else:
+                ds = f"{year:04d}-{month:02d}-{d:02d}"
+                cls = "today" if ds == today else ""
+                if ds in dates:
+                    tds.append(f'<td class="{cls}"><span class="has"><a href="archive/{ds}.html">{d}</a></span></td>')
+                else:
+                    tds.append(f'<td class="{cls}"><span class="dot">{d}</span></td>')
+        rows.append("<tr>" + "".join(tds) + "</tr>")
+    return f"""<div class="mo"><h3>{year} 年 {month} 月</h3><table>
+<tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
+{''.join(rows)}</table></div>"""
 
-# 干跑测试用样例（--dry-run 时不访问网络）
-SAMPLE_ITEMS = [
-    {"id":"smp01","country":"EU整体","sector":"政经","grade":"a",
-     "title":"[SAMPLE] ECB 9 月加息 25bp 纪要公布，存款利率 2.50%",
-     "link":"https://www.ecb.europa.eu/","summary":"管委会就通胀上行风险达成加息共识，10-29 议息成焦点。","time":""},
-    {"id":"smp02","country":"意大利","sector":"IT·AI","grade":"a",
-     "title":"[SAMPLE] 意大利 AI 法 12 个月授权届满，Garante 像素新规 10-28 截止",
-     "link":"https://www.whitecase.com/","summary":"Legge 132/2025 实施条例窗口开启；Provision No.284 将邮件像素视同 cookie 需事先同意。","time":""},
-    {"id":"smp03","country":"罗马尼亚","sector":"政经","grade":"b",
-     "title":"[SAMPLE] BNR 维持政策利率 6.5% 不变",
-     "link":"https://www.romania-insider.com/","summary":"央行在非常高不确定性下按兵不动，分析师预计长期维持。","time":""},
-    {"id":"smp04","country":"匈牙利","sector":"政经","grade":"b",
-     "title":"[SAMPLE] 匈牙利 Q2 GDP +1.7%，欧盟解冻资金进入执行期",
-     "link":"https://tradingeconomics.com/hungary/news","summary":"服务业驱动复苏，欧委会预测 2026 全年 +1.8%。","time":""},
-]
+def calendar_html(dates, today):
+    y, m = today.year, today.month
+    blocks = []
+    yy, mm = y, m
+    for _ in range(CAL_MONTHS):
+        blocks.append(month_block(yy, mm, dates, today))
+        mm -= 1
+        if mm == 0:
+            yy, mm = yy - 1, 12
+    return '<div class="cal">' + "".join(reversed(blocks)) + "</div>"
 
+def render_index(items, errors, issues, today_str):
+    dates = {i["date"] for i in issues}
+    today = datetime.date.fromisoformat(today_str)
+    hist_rows = "".join(
+        f'<a href="{i["url"]}"><span class="dt">{i["date"]}</span><span class="hl">{i.get("title","")}</span></a>'
+        for i in sorted(issues, key=lambda x: x["date"], reverse=True)[:60]
+    )
+    if REPO:
+        backup = (f'<h2>数据备份</h2><div class="hist">'
+                  f'<a href="manifest.json">manifest.json（各期索引，JSON）</a>'
+                  f'<a href="https://github.com/{REPO}/archive/refs/heads/gh-pages.zip">下载全部历史存档（gh-pages 分支 zip）</a>'
+                  f"</div>")
+    else:
+        backup = (f'<h2>数据备份</h2><div class="hist">'
+                  f'<a href="manifest.json">manifest.json（各期索引，JSON）</a>'
+                  f"</div>")
+    err_html = f'<div class="sum">抓取异常源 {len(errors)} 个（详见日志）。</div>' if errors else ""
+    return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{SITE_TITLE} · {today_str}</title>
+<style>{BASE_CSS}</style></head><body><div class="wrap">
+<h1>{SITE_TITLE}</h1>
+<div class="m">{today_str} · Europe/Brussels · 覆盖 EU整体 + 德/法/意/西/罗/匈 · 政经 · IT · AI 高科技 · 本期 {len(items)} 条 · <a href="archive/{today_str}.html">本期单页</a></div>
+{err_html}
+{cards_html(items)}
+<h2>简报日历 <span class="badge">（蓝点为已有存档，可点击）</span></h2>
+{calendar_html(dates, today)}
+<h2>历史简报</h2>
+<div class="hist">{hist_rows or '<span class="hl">暂无历史存档</span>'}</div>
+{backup}
+{foot_html()}
+</div></body></html>"""
+
+# ---------- 存档 / manifest ----------
+def list_issues():
+    issues = []
+    for f in sorted(ARCHIVE.glob("*.html")):
+        issues.append({"date": f.stem, "url": f"archive/{f.name}", "title": ""})
+    return issues
+
+def update_manifest(issues):
+    manifest = {"site": SITE_TITLE, "updated": now_local().isoformat(), "count": len(issues),
+                "issues": [{"date": i["date"], "url": i["url"], "title": i.get("title", "")} for i in issues]}
+    (PUBLIC / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+# ---------- 邮件 ----------
 def build_email(html):
     msg = MIMEText(html, "html", "utf-8")
     msg["From"] = formataddr((str(Header("EU Daily Bot", "utf-8")), MAIL_FROM))
@@ -219,36 +309,61 @@ def send_email(html):
         s.sendmail(MAIL_FROM, MAIL_TO, msg.as_string())
     return True
 
+SAMPLE_ITEMS = [
+    {"id":"smp01","country":"EU整体","sector":"政经","grade":"a","title":"[SAMPLE] ECB 9 月加息 25bp 纪要公布，存款利率 2.50%","link":"https://www.ecb.europa.eu/","summary":"管委会就通胀上行风险达成加息共识，10-29 议息成焦点。","conf":"高","tr":"持续"},
+    {"id":"smp02","country":"意大利","sector":"IT·AI","grade":"a","title":"[SAMPLE] 意大利 AI 法 12 个月授权届满，Garante 像素新规 10-28 截止","link":"https://www.whitecase.com/","summary":"Legge 132/2025 实施条例窗口开启；Provision No.284 将邮件像素视同 cookie 需事先同意。","conf":"高","tr":"持续"},
+    {"id":"smp03","country":"罗马尼亚","sector":"政经","grade":"b","title":"[SAMPLE] BNR 维持政策利率 6.5% 不变","link":"https://www.romania-insider.com/","summary":"央行在非常高不确定性下按兵不动。","conf":"高","tr":"观察"},
+]
+
 def main():
     if "--dry-run" in sys.argv:
-        html = render(SAMPLE_ITEMS, ["dry-run: no network in sandbox"])
+        date_str = now_local().strftime("%Y-%m-%d")
+        (ARCHIVE / f"{date_str}.html").write_text(render_issue(SAMPLE_ITEMS, ["dry-run"], date_str), encoding="utf-8")
+        issues = list_issues()
+        for i in issues:
+            if not i["title"]:
+                i["title"] = SAMPLE_ITEMS[0]["title"]
+        update_manifest(issues)
+        html = render_index(SAMPLE_ITEMS, [], issues, date_str)
         (PUBLIC / "index.html").write_text(html, encoding="utf-8")
         msg = build_email(html)
-        raw = msg.as_string()
-        print("[dry-run] index.html 已生成：", len(html), "chars")
+        print("[dry-run] index.html + archive/%s.html + manifest.json 已生成" % date_str)
         print("[dry-run] From:", msg["From"])
         print("[dry-run] To:", msg["To"])
         print("[dry-run] Subject:", msg["Subject"])
-        print("[dry-run] SMTP 目标:", MAIL_HOST + ":" + str(MAIL_PORT), "user:", MAIL_USER)
-        print("[dry-run] 邮件体积:", len(raw.encode("utf-8")), "bytes —— 未连接 SMTP，未发送")
+        print("[dry-run] REPO:", REPO or "(未设置，备份链接将省略 zip 项)")
+        print("[dry-run] 未连接 SMTP，未发送")
         return
     if "--check-time" in sys.argv and not should_run():
         print("非 Brussels 工作日 08:00 时段，退出。")
         return
+
+    date_str = now_local().strftime("%Y-%m-%d")
     st = load_state(); prune_state(st)
     items, errors = fetch()
     fresh = [it for it in items if it["id"] not in st["seen"]]
     for it in fresh:
         st["seen"][it["id"]] = now_local().replace(tzinfo=None).isoformat()
     save_state(st)
-    html = render(fresh or items, errors)
+    issue_items = fresh or items
+
+    # 1) 本期存档
+    (ARCHIVE / f"{date_str}.html").write_text(render_issue(issue_items, errors, date_str), encoding="utf-8")
+    # 2) 重建索引：manifest + 首页（日历 + 历史）
+    issues = list_issues()
+    head = issue_items[0]["title"] if issue_items else "本期无新条目"
+    for i in issues:
+        if i["date"] == date_str:
+            i["title"] = head
+    update_manifest(issues)
+    html = render_index(issue_items, errors, issues, date_str)
     (PUBLIC / "index.html").write_text(html, encoding="utf-8")
-    print(f"已生成 public/index.html：{len(fresh)} 条新条目（去重后），异常源 {len(errors)}。")
+    print(f"已生成 archive/{date_str}.html、index.html、manifest.json；新条目 {len(fresh)}（去重后），异常源 {len(errors)}。")
     for e in errors[:5]:
         print("WARN:", e)
     if "--send" in sys.argv:
         if not MAIL_PASS:
-            print("ERROR: MAIL_PASS 为空——请确认 .env 文件存在且已填入 163 授权码，或用 export MAIL_PASS=... 注入。")
+            print("ERROR: MAIL_PASS 为空——请确认 .env 或 Secrets 已配置 163 授权码。")
             sys.exit(2)
         ok = send_email(html)
         if ok:
