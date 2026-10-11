@@ -34,6 +34,10 @@ jobs:
           MAIL_FROM: wednet800@163.com
           MAIL_TO: hynes800@gmail.com
           GITHUB_REPOSITORY: ${{ github.repository }}
+          # 可选：配置后标题/摘要自动转中文；不配置则显示原文
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
 
       - uses: peaceiris/actions-gh-pages@v4
         with:
