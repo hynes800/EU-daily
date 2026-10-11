@@ -16,6 +16,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+
+      # 拉取 gh-pages 上已有的历史存档，避免被覆盖丢失
+      - name: Restore archive from gh-pages
+        run: |
+          git fetch origin gh-pages --depth=1 || true
+          mkdir -p public
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git checkout origin/gh-pages -- archive && mv archive public/archive || true
+          fi
+
       - name: Build and send
         run: python main.py ${{ github.event_name == 'schedule' && '--check-time' || '' }} --send
         env:
@@ -23,7 +33,11 @@ jobs:
           MAIL_USER: wednet800@163.com
           MAIL_FROM: wednet800@163.com
           MAIL_TO: hynes800@gmail.com
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          force_orphan: false
+          keep_files: true      # 保留历史 archive
