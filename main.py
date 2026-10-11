@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # EU 热点日报：抓取 -> 去重 -> 分级 -> 每期存档 -> 渲染首页(日历+历史) -> 163 SMTP 发送
-import os, sys, json, re, calendar, hashlib, smtplib, datetime, pathlib, urllib.request
+import os, sys, json, re, calendar, hashlib, smtplib, datetime, pathlib, urllib.request, urllib.parse
 from zoneinfo import ZoneInfo
 from email.mime.text import MIMEText
 from email.header import Header
@@ -199,6 +199,33 @@ def llm_translate(items):
         print("LLM translate failed, fallback to original:", ex)
     return items
 
+
+GT_URL = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q="
+
+def google_translate(text):
+    """免费公共翻译接口，无需 key；失败时原样返回。"""
+    if not text:
+        return text
+    try:
+        url = GT_URL + urllib.parse.quote(text)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        out = "".join(seg[0] for seg in data[0] if seg and seg[0])
+        return out.strip() or text
+    except Exception:
+        return text
+
+def translate_items(items):
+    """优先 LLM（译标题+改写中文摘要+校准）；未配置则用免费接口翻译标题与摘要。"""
+    if LLM_API_KEY and LLM_BASE_URL and LLM_MODEL:
+        return llm_translate(items)
+    for it in items:
+        it["title"] = google_translate(it["title"])
+        if it.get("summary"):
+            it["summary"] = google_translate(it["summary"])
+    return items
+
 # ---------- 渲染 ----------
 BASE_CSS = """
 body{margin:0;background:#f2f4f7;color:#1a1d23;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
@@ -383,7 +410,7 @@ def main():
         st["seen"][it["id"]] = now_local().replace(tzinfo=None).isoformat()
     save_state(st)
     issue_items = fresh or items
-    issue_items = llm_translate(issue_items)
+    issue_items = translate_items(issue_items)
 
     # 1) 本期存档
     (ARCHIVE / f"{date_str}.html").write_text(render_issue(issue_items, errors, date_str), encoding="utf-8")
