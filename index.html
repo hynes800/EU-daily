@@ -3,7 +3,7 @@
 <style>
 body{margin:0;background:#f2f4f7;color:#1a1d23;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
 a{color:#0b3d91;}
-.wrap{max-width:760px;margin:0 auto;padding:24px 14px 40px;}
+.wrap{max-width:1020px;margin:0 auto;padding:24px 14px 40px;}
 h1{font-size:22px;margin:0 0 4px;} .m{font-size:12px;color:#6b7280;}
 h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:8px;}
 .card{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
@@ -15,28 +15,42 @@ h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:
 .sum{font-size:14px;line-height:1.75;color:#374151;margin-top:4px;}
 .src{font-size:12px;color:#6b7280;margin-top:6px;}
 .foot{margin-top:18px;font-size:12px;color:#9aa1ab;line-height:1.7;border-top:1px solid #e2e6ec;padding-top:12px;}
-/* 日历 */
-.cal{margin-bottom:18px;}
-.cal .mo{display:inline-block;vertical-align:top;margin:0 14px 14px 0;background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:10px;}
-.cal .mo h3{margin:0 0 6px;font-size:13px;text-align:center;color:#374151;}
-.cal table{border-collapse:collapse;font-size:12px;}
-.cal th{color:#9aa1ab;font-weight:400;padding:2px 6px;}
-.cal td{padding:2px 4px;text-align:center;}
-.cal td .d{color:#9aa1ab;}
-.cal td .has a{display:inline-block;min-width:22px;padding:2px 4px;border-radius:6px;background:#eaf1fb;color:#0b3d91;text-decoration:none;font-weight:600;}
-.cal td.today .has a{outline:2px solid #0b3d91;}
-.cal td .dot{display:inline-block;min-width:22px;padding:2px 4px;color:#9aa1ab;}
+/* 左侧日历栏 */
+.layout{display:flex;gap:18px;align-items:flex-start;}
+.side{width:252px;flex:none;position:sticky;top:12px;}
+.side.hidden .calbox{display:none;}
+.calctl{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+.calctl select,.calctl button{border:1px solid #d5dae2;border-radius:8px;background:#fff;padding:4px 8px;font-size:13px;color:#1a1d23;cursor:pointer;}
+#calToggle{width:100%;margin-bottom:8px;border:1px solid #d5dae2;border-radius:8px;background:#fff;padding:6px;font-size:13px;color:#1a1d23;cursor:pointer;}
+#calToggle:hover,.calctl button:hover{background:#f0f4fa;}
+#calTbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e6ec;border-radius:10px;font-size:12px;overflow:hidden;}
+#calTbl th{color:#9aa1ab;font-weight:400;padding:5px 2px;}
+#calTbl td{padding:3px 2px;text-align:center;}
+#calTbl td .has a{display:inline-block;min-width:24px;padding:3px 4px;border-radius:6px;background:#eaf1fb;color:#0b3d91;text-decoration:none;font-weight:600;}
+#calTbl td.today .has a{outline:2px solid #0b3d91;}
+#calTbl td .dot{display:inline-block;min-width:24px;padding:3px 4px;color:#9aa1ab;}
+.maincol{flex:1;min-width:0;}
+@media (max-width:860px){.layout{flex-direction:column;}.side{width:100%;position:static;}}
 /* 历史 */
 .hist{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:6px 14px;margin-bottom:14px;}
 .hist a{display:block;padding:9px 0;border-bottom:1px solid #eef1f5;text-decoration:none;color:#1a1d23;font-size:14px;}
 .hist a:last-child{border-bottom:none;}
 .hist .dt{color:#0b3d91;font-weight:600;margin-right:8px;font-variant-numeric:tabular-nums;}
 .hist .hl{color:#6b7280;font-size:13px;}
-.badge{font-size:11px;color:#6b7280;}
+.badge{font-size:11px;color:#6b7280;font-weight:400;border:none;padding:0;}
 </style></head><body><div class="wrap">
 <h1>EU 热点日报</h1>
 <div class="m">2026-10-11 · Europe/Brussels · 覆盖 EU整体 + 德/法/意/西/罗/匈 · 政经 · IT · AI 高科技 · 本期 18 条 · <a href="archive/2026-10-11.html">本期单页</a></div>
 
+<div class="layout">
+<div class="side" id="side">
+<button id="calToggle">收起日历</button>
+<div class="calbox">
+<div class="calctl"><button id="prevM">&lsaquo;</button><select id="selY"></select><select id="selM"></select><button id="nextM">&rsaquo;</button></div>
+<table id="calTbl"></table>
+</div>
+</div>
+<div class="maincol">
 <div class="card a">
   <div class="row1"><span class="grade" style="background:#c0392b">A级</span>
   <span class="tag country">德国</span><span class="tag">IT·AI</span></div>
@@ -146,16 +160,52 @@ h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:
   <div class="sum">A vagyonadó bevezetése és a kisadózó vállalkozások tételes adójára (kata) vonatkozó szabályok lazítása a Tisza fontos kampányígérete volt, a héten mindkettőnél megtudhattuk a részleteket is.</div>
   <div class="src">置信度 待复核 ｜ 追踪 观察</div>
 </div>
-<h2>简报日历 <span class="badge">（蓝点为已有存档，可点击）</span></h2>
-<div class="cal"><div class="mo"><h3>2026 年 8 月</h3><table>
-<tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
-<tr><td></td><td></td><td></td><td></td><td></td><td class=""><span class="dot">1</span></td><td class=""><span class="dot">2</span></td></tr><tr><td class=""><span class="dot">3</span></td><td class=""><span class="dot">4</span></td><td class=""><span class="dot">5</span></td><td class=""><span class="dot">6</span></td><td class=""><span class="dot">7</span></td><td class=""><span class="dot">8</span></td><td class=""><span class="dot">9</span></td></tr><tr><td class=""><span class="dot">10</span></td><td class=""><span class="dot">11</span></td><td class=""><span class="dot">12</span></td><td class=""><span class="dot">13</span></td><td class=""><span class="dot">14</span></td><td class=""><span class="dot">15</span></td><td class=""><span class="dot">16</span></td></tr><tr><td class=""><span class="dot">17</span></td><td class=""><span class="dot">18</span></td><td class=""><span class="dot">19</span></td><td class=""><span class="dot">20</span></td><td class=""><span class="dot">21</span></td><td class=""><span class="dot">22</span></td><td class=""><span class="dot">23</span></td></tr><tr><td class=""><span class="dot">24</span></td><td class=""><span class="dot">25</span></td><td class=""><span class="dot">26</span></td><td class=""><span class="dot">27</span></td><td class=""><span class="dot">28</span></td><td class=""><span class="dot">29</span></td><td class=""><span class="dot">30</span></td></tr><tr><td class=""><span class="dot">31</span></td><td></td><td></td><td></td><td></td><td></td><td></td></tr></table></div><div class="mo"><h3>2026 年 9 月</h3><table>
-<tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
-<tr><td></td><td class=""><span class="dot">1</span></td><td class=""><span class="dot">2</span></td><td class=""><span class="dot">3</span></td><td class=""><span class="dot">4</span></td><td class=""><span class="dot">5</span></td><td class=""><span class="dot">6</span></td></tr><tr><td class=""><span class="dot">7</span></td><td class=""><span class="dot">8</span></td><td class=""><span class="dot">9</span></td><td class=""><span class="dot">10</span></td><td class=""><span class="dot">11</span></td><td class=""><span class="dot">12</span></td><td class=""><span class="dot">13</span></td></tr><tr><td class=""><span class="dot">14</span></td><td class=""><span class="dot">15</span></td><td class=""><span class="dot">16</span></td><td class=""><span class="dot">17</span></td><td class=""><span class="dot">18</span></td><td class=""><span class="dot">19</span></td><td class=""><span class="dot">20</span></td></tr><tr><td class=""><span class="dot">21</span></td><td class=""><span class="dot">22</span></td><td class=""><span class="dot">23</span></td><td class=""><span class="dot">24</span></td><td class=""><span class="dot">25</span></td><td class=""><span class="dot">26</span></td><td class=""><span class="dot">27</span></td></tr><tr><td class=""><span class="dot">28</span></td><td class=""><span class="dot">29</span></td><td class=""><span class="dot">30</span></td><td></td><td></td><td></td><td></td></tr></table></div><div class="mo"><h3>2026 年 10 月</h3><table>
-<tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
-<tr><td></td><td></td><td></td><td class=""><span class="dot">1</span></td><td class=""><span class="dot">2</span></td><td class=""><span class="dot">3</span></td><td class=""><span class="dot">4</span></td></tr><tr><td class=""><span class="dot">5</span></td><td class=""><span class="dot">6</span></td><td class=""><span class="dot">7</span></td><td class=""><span class="dot">8</span></td><td class=""><span class="dot">9</span></td><td class=""><span class="dot">10</span></td><td class=""><span class="has"><a href="archive/2026-10-11.html">11</a></span></td></tr><tr><td class=""><span class="dot">12</span></td><td class=""><span class="dot">13</span></td><td class=""><span class="dot">14</span></td><td class=""><span class="dot">15</span></td><td class=""><span class="dot">16</span></td><td class=""><span class="dot">17</span></td><td class=""><span class="dot">18</span></td></tr><tr><td class=""><span class="dot">19</span></td><td class=""><span class="dot">20</span></td><td class=""><span class="dot">21</span></td><td class=""><span class="dot">22</span></td><td class=""><span class="dot">23</span></td><td class=""><span class="dot">24</span></td><td class=""><span class="dot">25</span></td></tr><tr><td class=""><span class="dot">26</span></td><td class=""><span class="dot">27</span></td><td class=""><span class="dot">28</span></td><td class=""><span class="dot">29</span></td><td class=""><span class="dot">30</span></td><td class=""><span class="dot">31</span></td><td></td></tr></table></div></div>
 <h2>历史简报</h2>
 <div class="hist"><a href="archive/2026-10-11.html"><span class="dt">2026-10-11</span><span class="hl">Selenskyj will Angriffe auf russische Raffinerien fortsetzen</span></a></div>
 <h2>数据备份</h2><div class="hist"><a href="manifest.json">manifest.json（各期索引，JSON）</a><a href="https://github.com/hynes800/EU-daily/archive/refs/heads/gh-pages.zip">下载全部历史存档（gh-pages 分支 zip）</a></div>
 <div class="foot">自动抓取生成，信源窗口近 24 小时；内容为公开信息摘要，不构成投资或法律建议，重要事项请核对原文。<br></div>
-</div></body></html>
+</div>
+</div>
+
+<script>
+var ISSUE_DATES = new Set(["2026-10-11"]);
+var TODAY = "2026-10-11";
+var curY = parseInt(TODAY.slice(0,4),10), curM = parseInt(TODAY.slice(5,7),10);
+function pad(n){return (n<10?"0":"")+n;}
+function ds(y,m,d){return y+"-"+pad(m)+"-"+pad(d);}
+function fillSel(){
+  var ys=document.getElementById("selY"), ms=document.getElementById("selM");
+  var minY=curY-3, maxY=curY+1;
+  ISSUE_DATES.forEach(function(s){var y=parseInt(s.slice(0,4),10); if(y<minY)minY=y;});
+  ys.innerHTML=""; for(var y=maxY;y>=minY;y--){var o=document.createElement("option");o.value=y;o.textContent=y+"\u5e74";if(y===curY)o.selected=true;ys.appendChild(o);}
+  ms.innerHTML=""; for(var m=1;m<=12;m++){var o=document.createElement("option");o.value=m;o.textContent=m+"\u6708";if(m===curM)o.selected=true;ms.appendChild(o);}
+}
+function renderCal(){
+  var first=new Date(curY,curM-1,1);
+  var offset=(first.getDay()+6)%7;
+  var days=new Date(curY,curM,0).getDate();
+  var html="<tr><th>\u4e00</th><th>\u4e8c</th><th>\u4e09</th><th>\u56db</th><th>\u4e94</th><th>\u516d</th><th>\u65e5</th></tr><tr>";
+  for(var i=0;i<offset;i++) html+="<td></td>";
+  for(var d=1;d<=days;d++){
+    var s=ds(curY,curM,d);
+    if(s===TODAY){ html+='<td class="today"><span class="has"><a href="archive/'+s+'.html">'+d+'</a></span></td>'; }
+    else if(ISSUE_DATES.has(s)){ html+='<td><span class="has"><a href="archive/'+s+'.html">'+d+'</a></span></td>'; }
+    else { html+='<td><span class="dot">'+d+'</span></td>'; }
+    if((offset+d)%7===0) html+="</tr><tr>";
+  }
+  html+="</tr>";
+  document.getElementById("calTbl").innerHTML=html;
+  fillSel();
+}
+function shiftMonth(n){ curM+=n; if(curM<1){curM=12;curY--;} if(curM>12){curM=1;curY++;} renderCal(); }
+document.getElementById("prevM").onclick=function(){shiftMonth(-1);};
+document.getElementById("nextM").onclick=function(){shiftMonth(1);};
+document.getElementById("selY").onchange=function(){curY=parseInt(this.value,10);renderCal();};
+document.getElementById("selM").onchange=function(){curM=parseInt(this.value,10);renderCal();};
+var side=document.getElementById("side"), tgl=document.getElementById("calToggle");
+function applyHidden(h){ side.className="side"+(h?" hidden":""); tgl.textContent=h?"\u5c55\u5f00\u65e5\u5386":"\u6536\u8d77\u65e5\u5386"; }
+applyHidden(localStorage.getItem("euCalHidden")==="1");
+tgl.onclick=function(){ var h=side.className.indexOf("hidden")===-1; applyHidden(h); localStorage.setItem("euCalHidden",h?"1":"0"); };
+renderCal();
+</script>
+</body></html>

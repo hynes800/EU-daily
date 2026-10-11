@@ -3,7 +3,7 @@
 <style>
 body{margin:0;background:#f2f4f7;color:#1a1d23;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
 a{color:#0b3d91;}
-.wrap{max-width:760px;margin:0 auto;padding:24px 14px 40px;}
+.wrap{max-width:1020px;margin:0 auto;padding:24px 14px 40px;}
 h1{font-size:22px;margin:0 0 4px;} .m{font-size:12px;color:#6b7280;}
 h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:8px;}
 .card{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
@@ -15,24 +15,29 @@ h2{font-size:16px;margin:22px 0 10px;border-left:4px solid #0b3d91;padding-left:
 .sum{font-size:14px;line-height:1.75;color:#374151;margin-top:4px;}
 .src{font-size:12px;color:#6b7280;margin-top:6px;}
 .foot{margin-top:18px;font-size:12px;color:#9aa1ab;line-height:1.7;border-top:1px solid #e2e6ec;padding-top:12px;}
-/* 日历 */
-.cal{margin-bottom:18px;}
-.cal .mo{display:inline-block;vertical-align:top;margin:0 14px 14px 0;background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:10px;}
-.cal .mo h3{margin:0 0 6px;font-size:13px;text-align:center;color:#374151;}
-.cal table{border-collapse:collapse;font-size:12px;}
-.cal th{color:#9aa1ab;font-weight:400;padding:2px 6px;}
-.cal td{padding:2px 4px;text-align:center;}
-.cal td .d{color:#9aa1ab;}
-.cal td .has a{display:inline-block;min-width:22px;padding:2px 4px;border-radius:6px;background:#eaf1fb;color:#0b3d91;text-decoration:none;font-weight:600;}
-.cal td.today .has a{outline:2px solid #0b3d91;}
-.cal td .dot{display:inline-block;min-width:22px;padding:2px 4px;color:#9aa1ab;}
+/* 左侧日历栏 */
+.layout{display:flex;gap:18px;align-items:flex-start;}
+.side{width:252px;flex:none;position:sticky;top:12px;}
+.side.hidden .calbox{display:none;}
+.calctl{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+.calctl select,.calctl button{border:1px solid #d5dae2;border-radius:8px;background:#fff;padding:4px 8px;font-size:13px;color:#1a1d23;cursor:pointer;}
+#calToggle{width:100%;margin-bottom:8px;border:1px solid #d5dae2;border-radius:8px;background:#fff;padding:6px;font-size:13px;color:#1a1d23;cursor:pointer;}
+#calToggle:hover,.calctl button:hover{background:#f0f4fa;}
+#calTbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e6ec;border-radius:10px;font-size:12px;overflow:hidden;}
+#calTbl th{color:#9aa1ab;font-weight:400;padding:5px 2px;}
+#calTbl td{padding:3px 2px;text-align:center;}
+#calTbl td .has a{display:inline-block;min-width:24px;padding:3px 4px;border-radius:6px;background:#eaf1fb;color:#0b3d91;text-decoration:none;font-weight:600;}
+#calTbl td.today .has a{outline:2px solid #0b3d91;}
+#calTbl td .dot{display:inline-block;min-width:24px;padding:3px 4px;color:#9aa1ab;}
+.maincol{flex:1;min-width:0;}
+@media (max-width:860px){.layout{flex-direction:column;}.side{width:100%;position:static;}}
 /* 历史 */
 .hist{background:#fff;border:1px solid #e2e6ec;border-radius:10px;padding:6px 14px;margin-bottom:14px;}
 .hist a{display:block;padding:9px 0;border-bottom:1px solid #eef1f5;text-decoration:none;color:#1a1d23;font-size:14px;}
 .hist a:last-child{border-bottom:none;}
 .hist .dt{color:#0b3d91;font-weight:600;margin-right:8px;font-variant-numeric:tabular-nums;}
 .hist .hl{color:#6b7280;font-size:13px;}
-.badge{font-size:11px;color:#6b7280;}
+.badge{font-size:11px;color:#6b7280;font-weight:400;border:none;padding:0;}
 </style></head><body><div class="wrap">
 <h1>EU 热点日报</h1>
 <div class="m">2026-10-11 期 · <a href="../index.html">返回首页/日历</a> · 覆盖 EU整体 + 德/法/意/西/罗/匈 · 政经 · IT · AI 高科技 · 本期 18 条</div>
